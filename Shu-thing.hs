@@ -1,7 +1,7 @@
 module Main (main)
     where
 
-import Control.Exception (Exception(ExitException), catch, throwIO)
+import Control.Exception (catch, throwIO,SomeException)
 import Control.Monad (zipWithM_)
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef, writeIORef)
 import Data.List (nub)
@@ -19,7 +19,11 @@ import Graphics.UI.GLUT (DisplayMode(RGBMode, DoubleBuffered),
                         ClearBuffer(DepthBuffer, ColorBuffer), clear, HasSetter(..), lookAt,
                         perspective, Color(color), Color3(..), Vertex3(..))
 import Prelude hiding (catch)
-import System.Exit (ExitCode(ExitSuccess))
+import System.Exit (ExitCode(ExitSuccess),exitWith)
+
+import qualified Foreign.C.Types
+
+type NDouble = Foreign.C.Types.CDouble
 
 main :: IO ()
 main = do
@@ -44,10 +48,10 @@ main = do
   mainLoop
   destroyWindow wnd
 
-  `catch` (\_ -> return ())
+  `catch` (\e -> return (const () (e::SomeException)) )
 
 exitLoop :: IO a
-exitLoop = throwIO $ ExitException ExitSuccess
+exitLoop = exitWith ExitSuccess
 
 initMatrix :: IO ()
 initMatrix = do
@@ -55,7 +59,7 @@ initMatrix = do
   matrixMode $= Projection
   loadIdentity
   perspective 30.0 (4/3) 600 1400
-  lookAt (Vertex3 0 0 (927 :: Double)) (Vertex3 0 0 (0 :: Double)) (Vector3 0 1 (0 :: Double))
+  lookAt (Vertex3 0 0 (927 :: NDouble)) (Vertex3 0 0 (0 :: NDouble)) (Vector3 0 1 (0 :: NDouble))
 
 dispProc :: IORef (IO Scene) -> IO ()
 dispProc cp = do
@@ -73,14 +77,14 @@ openingProc ks = do
   matrixMode $= Modelview 0
   loadIdentity
 
-  color $ Color3 (1.0 :: Double) 1.0 1.0
+  color $ Color3 (1.0 :: NDouble) 1.0 1.0
   preservingMatrix $ do
-    translate $ Vector3 (-250 :: Double) 0 0
-    scale (0.8 :: Double) 0.8 0.8
+    translate $ Vector3 (-250 :: NDouble) 0 0
+    scale (0.8 :: NDouble) 0.8 0.8
     renderString Roman "shu-thing"
   preservingMatrix $ do
-    translate $ Vector3 (-180 :: Double) (-100) 0
-    scale (0.4 :: Double) 0.4 0.4
+    translate $ Vector3 (-180 :: NDouble) (-100) 0
+    scale (0.4 :: NDouble) 0.4 0.4
     renderString Roman "Press Z key"
 
   swapBuffers
@@ -90,7 +94,7 @@ openingProc ks = do
       return $ Scene $ mainProc gs ks
    else return $ Scene $ openingProc ks
 
-endingProc :: IORef [Key] -> IORef Double -> IO Scene
+endingProc :: IORef [Key] -> IORef NDouble -> IO Scene
 endingProc ks ctr= do
   keystate <- readIORef ks
   counter <- readIORef ctr
@@ -99,10 +103,10 @@ endingProc ks ctr= do
   matrixMode $= Modelview 0
   loadIdentity
 
-  color $ Color3 (1.0 :: Double) 1.0 1.0
+  color $ Color3 (1.0 :: NDouble) 1.0 1.0
   zipWithM_ (\str pos -> preservingMatrix $ do
-    translate $ Vector3 (-180 :: Double) (-240+counter-pos) 0
-    scale (0.3 :: Double) 0.3 0.3
+    translate $ Vector3 (-180 :: NDouble) (-240+counter-pos) 0
+    scale (0.3 :: NDouble) 0.3 0.3
     renderString Roman str)
     stuffRoll [0,60..]
 
@@ -163,7 +167,7 @@ mainProc gs ks = do
   swapBuffers
   if (isGameover gamestate) then return $ Scene $ openingProc ks else
    if (isClear gamestate) then do
-      counter <- newIORef (0.0 :: Double)
+      counter <- newIORef (0.0 :: NDouble)
       return $ Scene $ endingProc ks counter else
     return $ Scene $ mainProc gs ks
 
@@ -182,17 +186,17 @@ bosstime, bosstime2 :: Int
 bosstime = 6600
 bosstime2 = 7200
 
-data GameObject = Player {position :: Point,shotEnergy :: Double,hp :: Double}|
+data GameObject = Player {position :: Point,shotEnergy :: NDouble,hp :: NDouble}|
                   Bullet {position :: Point} |
                   EnemyMaker {timer :: Int,deathtimer :: Int}|
-                  Enemy {position :: Point,hp :: Double,anime :: Int,enemySpec :: EnemySpec} |
-                  Explosion {position :: Point,hp :: Double,size :: Double}|
+                  Enemy {position :: Point,hp :: NDouble,anime :: Int,enemySpec :: EnemySpec} |
+                  Explosion {position :: Point,hp :: NDouble,size :: NDouble}|
                   EnemyBullet {position :: Point,velocity :: Point} |
                   GameoverSignal |
                   ClearSignal
                   deriving (Eq)
 
-data EnemySpec = EnemySpec {ways :: Int,spread :: Double,speed :: Double,freq :: Int,endurance :: Double,boss :: Bool}
+data EnemySpec = EnemySpec {ways :: Int,spread :: NDouble,speed :: NDouble,freq :: Int,endurance :: NDouble,boss :: Bool}
                  deriving (Eq)
 
 updateObject :: GameState -> [Key] -> GameObject -> [GameObject]
@@ -206,13 +210,13 @@ updateObject _ ks (Player{position=pos,shotEnergy=sen,hp=oldhp})
   (x,y) = pos
   nx = if (x < (-310)) then -310 else if (x > 310) then 310 else x
   ny = if (y < (-230)) then -230 else if (y > 200) then 200 else y
-  v = (vx,vy) *++ (5.0 :: Double)
+  v = (vx,vy) *++ (5.0 :: NDouble)
   shots = replicate shotn $ Bullet pos
   nsen = if (shotn /= 0) then (-1.0) else
     if (shotmode == 1 && shotn == 0) then (sen+0.25) else
     if(shotmode == 0) then 0.0 else
     sen
-  vx :: Double
+  vx :: NDouble
   vx =
    if ((SpecialKey KeyLeft) `elem` ks) then -1 else 0 +
    if ((SpecialKey KeyRight) `elem` ks) then 1 else 0
@@ -231,7 +235,7 @@ updateObject _ _ (Bullet{position=pos}) = replicate n (Bullet newpos) where
 updateObject gs _ (EnemyMaker{timer=t,deathtimer=dtime}) =
  [EnemyMaker{timer=t+1,deathtimer=newdtime}] ++ enemies ++ deatheffects where
   enemies = replicate n $ Enemy{position = (320*sin(dt*dt),240),hp=1.0,anime=0,enemySpec = spec}
-  dt :: Double
+  dt :: NDouble
   dt = fromIntegral t
   newdtime = dtime + if (hp p<=0 || (bossExist&&hp b<=0)) then 1 else 0
   n = if((t`mod`120==0 && t<=bosstime) || t==bosstime2) then 1 else 0
@@ -280,7 +284,7 @@ updateObject gs _ oldenemy@(Enemy{position=pos,hp=oldhp,anime=oldanime,enemySpec
         | (oldhp > 0.05) = EnemySpec{ways=40,spread=0.075,speed=3.0,freq=60,endurance=400.0,boss=True}
         | (oldhp > 0.00) = EnemySpec{ways=15,spread=0.2,speed=16.0,freq=20,endurance=900.0,boss=True}
         | otherwise = EnemySpec{ways=(-1),spread=0.1,speed=3.0,freq=10,endurance=300.0,boss=True}
-    danime :: Double
+    danime :: NDouble
     danime = fromIntegral oldanime
     explosions = if(oldhp<=0 && not isBoss) then [Explosion{position=pos,hp=1.0,size=1.0}] else []
     shots = if(oldanime`mod` frq /=(frq-1)) then [] else
@@ -336,35 +340,35 @@ watcher os = np ++ ne ++ nb ++ neb ++ others
 renderGameObject :: GameObject -> IO ()
 renderGameObject Player{position=pos,hp=h} = preservingMatrix $ do
   let (x,y) = pos
-  color (Color3 (1.0 :: Double) h h)
+  color (Color3 (1.0 :: NDouble) h h)
   translate (Vector3 x y 0)
-  scale (10 :: Double) 10 10
+  scale (10 :: NDouble) 10 10
   rotate (x) (Vector3 0 1 0)
-  rotate (30 :: Double) (Vector3 0 0 1)
+  rotate (30 :: NDouble) (Vector3 0 0 1)
   renderObject Wireframe Dodecahedron
 renderGameObject Bullet{position=pos} = preservingMatrix $ do
   let (x,y) = pos
-  color (Color3 (0.6 :: Double) 0.6 1.0)
+  color (Color3 (0.6 :: NDouble) 0.6 1.0)
   translate (Vector3 x y 0)
-  scale (4 :: Double) 18 8
-  rotate (45 :: Double) (Vector3 0 1 0)
-  rotate (90 :: Double) (Vector3 1 0 0)
+  scale (4 :: NDouble) 18 8
+  rotate (45 :: NDouble) (Vector3 0 1 0)
+  rotate (90 :: NDouble) (Vector3 1 0 0)
   renderObject Wireframe Tetrahedron
 renderGameObject Enemy{position=pos,anime=a,hp=h,enemySpec=EnemySpec{boss=False}} = preservingMatrix $ do
   let (x,y) = pos
-  color (Color3 (cos rho) (sin rho) (0.0 :: Double))
+  color (Color3 (cos rho) (sin rho) (0.0 :: NDouble))
   translate (Vector3 x y 0)
-  rotate (2*(theta :: Double)) (Vector3 0 1.0 0)
-  scale (32 :: Double) 32 8
+  rotate (2*(theta :: NDouble)) (Vector3 0 1.0 0)
+  scale (32 :: NDouble) 32 8
   renderObject Wireframe Octahedron where
     theta = fromIntegral a
     rho = h * 3.14 / 2
 renderGameObject Enemy{position=pos,anime=a,hp=h,enemySpec=EnemySpec{boss=True}} = preservingMatrix $ do
   let (x,y) = pos
-  color (Color3 (cos rho) (sin rho) (0.0 :: Double))
+  color (Color3 (cos rho) (sin rho) (0.0 :: NDouble))
   translate (Vector3 x y 0)
-  rotate (2*(theta :: Double)) (Vector3 0 1.0 0)
-  scale (120 :: Double) 120 120
+  rotate (2*(theta :: NDouble)) (Vector3 0 1.0 0)
+  scale (120 :: NDouble) 120 120
   renderObject Wireframe (Teapot 1.0) where
     theta = fromIntegral a
     rho = h * 3.14 / 2
@@ -379,10 +383,10 @@ renderGameObject Explosion{position=pos,hp=h,size=s}= preservingMatrix $ do
     r = s*(100 - h*h*80)
 renderGameObject EnemyBullet{position=pos} = preservingMatrix $ do
   let (x,y) = pos
-  color (Color3 (1.0 :: Double) 1.0 1.0)
+  color (Color3 (1.0 :: NDouble) 1.0 1.0)
   translate (Vector3 x y 0)
-  scale (5 :: Double) 5 5
-  rotate (45 :: Double) (Vector3 0 0 (1.0 :: Double))
+  scale (5 :: NDouble) 5 5
+  rotate (45 :: NDouble) (Vector3 0 0 (1.0 :: NDouble))
   renderObject Wireframe  Tetrahedron
 renderGameObject _ = return ()
 
@@ -419,9 +423,9 @@ isGameover GameState{objects=os} = (GameoverSignal `elem` os)
 isClear :: GameState -> Bool
 isClear GameState{objects=os} = (ClearSignal `elem` os)
 
-type Point = (Double,Double)
+type Point = (NDouble,NDouble)
 
-(+++) :: (Double, Double) -> (Double, Double) -> (Double, Double)
+(+++) :: (NDouble, NDouble) -> (NDouble, NDouble) -> (NDouble, NDouble)
 (ax,ay) +++ (bx,by) = (ax+bx, ay+by)
 
 (-+-) :: (Num t1, Num t) => (t, t1) -> (t, t1) -> (t, t1)
@@ -433,10 +437,10 @@ type Point = (Double,Double)
 (***) :: (Num t) => (t, t) -> (t, t) -> (t, t)
 (ax,ay) *** (bx,by) = (ax*bx-ay*by,ay*bx+ax*by)
 
-sq :: Double -> Double
+sq :: NDouble -> NDouble
 sq x = x*x
 
-distance, distance2 :: Point -> Point -> Double
+distance, distance2 :: Point -> Point -> NDouble
 distance a b= sqrt $ distance2 a b
 distance2 (ax,ay) (bx,by) = sq(ax-bx) + sq(ay-by)
 
