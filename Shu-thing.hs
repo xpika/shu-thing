@@ -7,7 +7,8 @@ import Data.IORef (IORef, modifyIORef, newIORef, readIORef, writeIORef)
 import Data.List (nub)
 import Data.Maybe (isJust, fromJust)
 import Graphics.UI.GLUT (DisplayMode(RGBMode, DoubleBuffered),
-                        getArgsAndInitialize, initialDisplayMode, initialWindowSize, mainLoop,
+                        getArgsAndInitialize,
+                        GLdouble, initialDisplayMode, initialWindowSize, mainLoop,
                         createWindow, destroyWindow, swapBuffers, Menu(..), MenuItem(MenuEntry),
                         attachMenu, Font(renderString), StrokeFont(Roman), Flavour(Wireframe),
                         Object(Tetrahedron, Teapot, Octahedron, Icosahedron, Dodecahedron),
@@ -23,7 +24,7 @@ import System.Exit (ExitCode(ExitSuccess),exitWith)
 
 import qualified Foreign.C.Types
 
-type NDouble = Foreign.C.Types.CDouble
+type NDouble = GLdouble
 
 main :: IO ()
 main = do
